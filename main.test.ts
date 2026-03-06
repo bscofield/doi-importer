@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     stripDoi,
     isValidDoi,
@@ -9,7 +9,60 @@ import {
     findNoteByDoi,
     findAvailableFileName,
     buildNoteContent,
+    fetchCitation,
+    DEFAULT_SETTINGS,
 } from './main';
+import { requestUrl } from 'obsidian';
+
+// ─── DEFAULT_SETTINGS ────────────────────────────────────────────────────────
+
+describe('DEFAULT_SETTINGS', () => {
+    it('has citationStyle set to apa', () => {
+        expect(DEFAULT_SETTINGS.citationStyle).toBe('apa');
+    });
+});
+
+// ─── fetchCitation ────────────────────────────────────────────────────────────
+
+describe('fetchCitation', () => {
+    const mockedRequestUrl = vi.mocked(requestUrl);
+
+    beforeEach(() => {
+        mockedRequestUrl.mockResolvedValue({ status: 200, text: '  Smith, J. (2023). A title. Nature.  ' } as any);
+    });
+
+    it('sends Accept header with configured style and locale', async () => {
+        await fetchCitation('10.1037/abc', 'chicago-author-date');
+        expect(mockedRequestUrl).toHaveBeenCalledWith(expect.objectContaining({
+            headers: { 'Accept': 'text/x-bibliography; style=chicago-author-date; locale=en-US' },
+        }));
+    });
+
+    it('sends Accept header with apa style by default', async () => {
+        await fetchCitation('10.1037/abc', 'apa');
+        expect(mockedRequestUrl).toHaveBeenCalledWith(expect.objectContaining({
+            headers: { 'Accept': 'text/x-bibliography; style=apa; locale=en-US' },
+        }));
+    });
+
+    it('calls doi.org with the encoded DOI', async () => {
+        await fetchCitation('10.1037/abc', 'apa');
+        expect(mockedRequestUrl).toHaveBeenCalledWith(expect.objectContaining({
+            url: 'https://doi.org/10.1037%2Fabc',
+            method: 'GET',
+        }));
+    });
+
+    it('returns trimmed citation text on success', async () => {
+        const result = await fetchCitation('10.1037/abc', 'apa');
+        expect(result).toBe('Smith, J. (2023). A title. Nature.');
+    });
+
+    it('throws on non-200 status', async () => {
+        mockedRequestUrl.mockResolvedValue({ status: 404, text: '' } as any);
+        await expect(fetchCitation('10.1037/abc', 'apa')).rejects.toThrow('Status 404');
+    });
+});
 
 // ─── stripDoi ────────────────────────────────────────────────────────────────
 

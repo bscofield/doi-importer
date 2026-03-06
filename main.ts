@@ -31,12 +31,14 @@ interface DoiImporterSettings {
 	notesFolder: string;
 	fileNameTemplate: string;
 	openNoteAfterImport: boolean;
+	citationStyle: string;
 }
 
-const DEFAULT_SETTINGS: DoiImporterSettings = {
+export const DEFAULT_SETTINGS: DoiImporterSettings = {
 	notesFolder: 'References',
 	fileNameTemplate: '{{citekey}}',
 	openNoteAfterImport: true,
+	citationStyle: 'apa',
 }
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
@@ -161,6 +163,17 @@ export function buildNoteContent(msg: CrossrefMessage, doi: string): string {
 	return lines.join('\n');
 }
 
+export async function fetchCitation(doi: string, style: string): Promise<string> {
+	const url = `https://doi.org/${encodeURIComponent(doi)}`;
+	const response = await requestUrl({
+		url,
+		method: 'GET',
+		headers: { 'Accept': `text/x-bibliography; style=${style}; locale=en-US` },
+	});
+	if (response.status !== 200) throw new Error(`Status ${response.status}`);
+	return response.text.trim();
+}
+
 // ─── Main Plugin Class ────────────────────────────────────────────────────────
 
 export default class DoiImporter extends Plugin {
@@ -175,6 +188,14 @@ export default class DoiImporter extends Plugin {
 			name: 'Import DOI',
 			editorCallback: (editor: Editor, _view: MarkdownView) => {
 				this.importDoi(editor);
+			}
+		});
+
+		this.addCommand({
+			id: 'copy-doi-citation',
+			name: 'Copy DOI citation',
+			editorCallback: (editor: Editor, _view: MarkdownView) => {
+				this.copyCitation(editor);
 			}
 		});
 	}
@@ -237,6 +258,36 @@ export default class DoiImporter extends Plugin {
 		}
 	}
 
+	async copyCitation(editor: Editor): Promise<void> {
+		const raw = editor.getSelection();
+		if (!raw) {
+			new Notice('No text selected. Please select a DOI.');
+			return;
+		}
+
+		const doi = stripDoi(raw.trim());
+		if (!isValidDoi(doi)) {
+			new Notice('Selected text does not appear to be a valid DOI.');
+			return;
+		}
+
+		new Notice('Fetching citation...');
+
+		let citation: string;
+		try {
+			citation = await fetchCitation(doi, this.settings.citationStyle);
+		} catch (e) {
+			if (e instanceof Error && e.message.startsWith('Status ')) {
+				new Notice('Citation not found or style unavailable.');
+			} else {
+				new Notice('Network error: could not reach Crossref.');
+			}
+			return;
+		}
+
+		editor.replaceSelection(citation);
+	}
+
 	private async fetchCrossref(doi: string): Promise<CrossrefMessage> {
 		const url = `https://api.crossref.org/works/${encodeURIComponent(doi)}`;
 		const response = await requestUrl({ url, method: 'GET' });
@@ -296,6 +347,17 @@ class DoiImporterSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.openNoteAfterImport)
 				.onChange(async (value) => {
 					this.plugin.settings.openNoteAfterImport = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Citation style')
+			.setDesc('CSL style name for the "Copy DOI citation" command. Full list at https://api.crossref.org/v1/styles')
+			.addText(text => text
+				.setPlaceholder('apa')
+				.setValue(this.plugin.settings.citationStyle)
+				.onChange(async (value) => {
+					this.plugin.settings.citationStyle = value.trim();
 					await this.plugin.saveSettings();
 				}));
 	}
