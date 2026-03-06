@@ -1,0 +1,26 @@
+{
+	"name": "doi-importer",
+	"version": "0.1.0",
+	"description": "An Obsidian plugin.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "vitest run"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin"
+	],
+	"author": "Your Name",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"builtin-modules": "^4.0.0",
+		"esbuild": "^0.21.5",
+		"obsidian": "latest",
+		"tslib": "^2.6.3",
+		"typescript": "^5.5.3",
+		"vitest": "^4.0.18"
+	}
+}
