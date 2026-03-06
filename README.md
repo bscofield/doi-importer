@@ -1,15 +1,36 @@
 # DOI Importer
 
-An Obsidian plugin that turns a selected DOI into a reference note. Highlight a DOI in any note, run the command, and the plugin fetches metadata from the [Crossref API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) and creates a structured note — replacing your selection with a wiki-link to it.
+An Obsidian plugin with two commands for working with DOIs:
 
-## Usage
+- **Import DOI** — turns a selected DOI into a structured reference note, replacing the selection with a wiki-link.
+- **Copy DOI citation** — replaces a selected DOI with a formatted citation string (APA, Chicago, etc.).
 
-1. In any note, select a DOI. Any of these formats work:
-   - `10.1037/0003-066X.59.1.29`
-   - `doi:10.1037/0003-066X.59.1.29`
-   - `https://doi.org/10.1037/0003-066X.59.1.29`
+Both commands fetch data from [Crossref](https://www.crossref.org/) and accept DOIs in any of these formats:
+- `10.1037/0003-066X.59.1.29`
+- `doi:10.1037/0003-066X.59.1.29`
+- `https://doi.org/10.1037/0003-066X.59.1.29`
+
+## Commands
+
+### Import DOI
+
+1. Select a DOI in any note.
 2. Open the command palette (`Cmd/Ctrl+P`) and run **Import DOI**.
-3. The plugin fetches metadata and creates a reference note. The selected text is replaced with a wiki-link: `[[smith2003|Article Title]]`.
+3. The plugin fetches metadata from the Crossref API and creates a reference note. The selected text is replaced with a wiki-link: `[[smith2003|Article Title]]`.
+
+### Copy DOI citation
+
+1. Select a DOI in any note.
+2. Open the command palette (`Cmd/Ctrl+P`) and run **Copy DOI citation**.
+3. The selected DOI is replaced with a plain-text formatted citation in your configured style (default: APA).
+
+Example output with `apa` style:
+
+```
+Pinker, S. (2003). How the mind works. American Psychologist, 59(1), 29–40. https://doi.org/10.1037/0003-066X.59.1.29
+```
+
+The citation style is configurable in settings. All 2,400+ [CSL styles](https://api.crossref.org/v1/styles) are supported (e.g. `chicago-author-date`, `nature`, `modern-language-association`).
 
 ## Generated note
 
@@ -58,6 +79,7 @@ If two different papers would produce the same citekey, the second one gets a le
 | Notes folder | `References` | Folder where reference notes are created. Created automatically if it doesn't exist. |
 | File name template | `{{citekey}}` | Template for note filenames. See tokens below. |
 | Open note after import | on | Opens the new (or existing) note after import. |
+| Citation style | `apa` | CSL style name used by **Copy DOI citation**. Full list at `https://api.crossref.org/v1/styles`. |
 
 ### Filename template tokens
 
