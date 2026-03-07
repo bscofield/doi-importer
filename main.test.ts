@@ -9,6 +9,9 @@ import {
     findNoteByDoi,
     findAvailableFileName,
     buildNoteContent,
+    buildNoteBody,
+    applyDoiFrontmatter,
+    createNoteWithTemplater,
     fetchCitation,
     DEFAULT_SETTINGS,
 } from './main';
@@ -426,5 +429,211 @@ describe('buildNoteContent', () => {
         const msg = { ...fullMsg, title: ['Title with "quotes"'] };
         const content = buildNoteContent(msg, '10.1/abc');
         expect(content).toContain('title: "Title with \\"quotes\\""');
+    });
+});
+
+// ─── buildNoteBody ────────────────────────────────────────────────────────────
+
+describe('buildNoteBody', () => {
+    const fullMsg = {
+        title: ['How the Mind Works'],
+        author: [{ family: 'Smith', given: 'John' }],
+        abstract: '<jats:p>An abstract.</jats:p>',
+    };
+
+    it('starts with a blank line then H1 heading', () => {
+        const body = buildNoteBody(fullMsg, '10.1/abc');
+        expect(body).toMatch(/^\n# How the Mind Works\n/);
+    });
+
+    it('falls back to DOI as heading when title absent', () => {
+        expect(buildNoteBody({}, '10.1/abc')).toContain('# 10.1/abc');
+    });
+
+    it('includes authors line', () => {
+        expect(buildNoteBody(fullMsg, '10.1/abc')).toContain('**Authors:** Smith, John');
+    });
+
+    it('omits authors line when no authors', () => {
+        expect(buildNoteBody({ title: ['Title'] }, '10.1/abc')).not.toContain('**Authors:**');
+    });
+
+    it('strips JATS tags from abstract', () => {
+        const body = buildNoteBody(fullMsg, '10.1/abc');
+        expect(body).toContain('An abstract.');
+        expect(body).not.toContain('<jats:p>');
+    });
+
+    it('omits abstract section when abstract absent', () => {
+        expect(buildNoteBody({ title: ['Title'] }, '10.1/abc')).not.toContain('**Abstract:**');
+    });
+
+    it('does not include frontmatter delimiters', () => {
+        const body = buildNoteBody(fullMsg, '10.1/abc');
+        expect(body).not.toContain('---');
+    });
+});
+
+// ─── applyDoiFrontmatter ──────────────────────────────────────────────────────
+
+describe('applyDoiFrontmatter', () => {
+    const fullMsg = {
+        title: ['How the Mind Works'],
+        author: [{ family: 'Smith', given: 'John' }],
+        issued: { 'date-parts': [[2023]] as [number[]] },
+        'container-title': ['Nature'],
+        volume: '42',
+        issue: '3',
+        page: '100-110',
+        publisher: 'Springer',
+        URL: 'https://doi.org/10.1/abc',
+        type: 'journal-article',
+    };
+
+    it('sets doi', () => {
+        const fm: Record<string, unknown> = {};
+        applyDoiFrontmatter(fm, fullMsg, '10.1/abc');
+        expect(fm.doi).toBe('10.1/abc');
+    });
+
+    it('sets title, year, journal, volume, issue, pages, publisher, url, type', () => {
+        const fm: Record<string, unknown> = {};
+        applyDoiFrontmatter(fm, fullMsg, '10.1/abc');
+        expect(fm.title).toBe('How the Mind Works');
+        expect(fm.year).toBe(2023);
+        expect(fm.journal).toBe('Nature');
+        expect(fm.volume).toBe('42');
+        expect(fm.issue).toBe('3');
+        expect(fm.pages).toBe('100-110');
+        expect(fm.publisher).toBe('Springer');
+        expect(fm.url).toBe('https://doi.org/10.1/abc');
+        expect(fm.type).toBe('journal-article');
+    });
+
+    it('sets authors as formatted array', () => {
+        const fm: Record<string, unknown> = {};
+        applyDoiFrontmatter(fm, fullMsg, '10.1/abc');
+        expect(fm.authors).toEqual(['Smith, John']);
+    });
+
+    it('sets aliases with doi, citekey, and title', () => {
+        const fm: Record<string, unknown> = {};
+        applyDoiFrontmatter(fm, fullMsg, '10.1/abc');
+        expect(fm.aliases).toEqual(['10.1/abc', 'smith2023', 'How the Mind Works']);
+    });
+
+    it('falls back to https://doi.org/{doi} for url when URL field absent', () => {
+        const fm: Record<string, unknown> = {};
+        applyDoiFrontmatter(fm, { ...fullMsg, URL: undefined }, '10.1/abc');
+        expect(fm.url).toBe('https://doi.org/10.1/abc');
+    });
+
+    it('omits optional fields when absent', () => {
+        const fm: Record<string, unknown> = {};
+        applyDoiFrontmatter(fm, { title: ['Title'] }, '10.1/abc');
+        expect(fm.year).toBeUndefined();
+        expect(fm.journal).toBeUndefined();
+        expect(fm.volume).toBeUndefined();
+        expect(fm.issue).toBeUndefined();
+        expect(fm.pages).toBeUndefined();
+        expect(fm.publisher).toBeUndefined();
+        expect(fm.type).toBeUndefined();
+    });
+
+    it('preserves existing frontmatter keys not set by DOI', () => {
+        const fm: Record<string, unknown> = { created: '2024-01-01', tags: ['reading'] };
+        applyDoiFrontmatter(fm, fullMsg, '10.1/abc');
+        expect(fm.created).toBe('2024-01-01');
+        expect(fm.tags).toEqual(['reading']);
+    });
+
+    it('overwrites conflicting keys with DOI values', () => {
+        const fm: Record<string, unknown> = { doi: 'old-doi', title: 'old title' };
+        applyDoiFrontmatter(fm, fullMsg, '10.1/abc');
+        expect(fm.doi).toBe('10.1/abc');
+        expect(fm.title).toBe('How the Mind Works');
+    });
+});
+
+// ─── createNoteWithTemplater ──────────────────────────────────────────────────
+
+describe('createNoteWithTemplater', () => {
+    const makeMsg = () => ({
+        title: ['Test Paper'],
+        author: [{ family: 'Doe', given: 'Jane' }],
+        issued: { 'date-parts': [[2024]] as [number[]] },
+        URL: 'https://doi.org/10.1/test',
+        type: 'journal-article',
+    });
+
+    const makeApp = () => {
+        const file = { path: 'References/doe2024.md' };
+        let capturedModifyHandler: ((f: any) => void) | null = null;
+
+        const app = {
+            vault: {
+                create: vi.fn().mockResolvedValue(file),
+                on: vi.fn((event: string, handler: (f: any) => void) => {
+                    if (event === 'modify') capturedModifyHandler = handler;
+                    return { id: 1 };
+                }),
+                offref: vi.fn(),
+                process: vi.fn((_file: any, cb: (content: string) => string) => {
+                    cb('---\ndoi: old\n---\n');
+                    return Promise.resolve();
+                }),
+            },
+            fileManager: {
+                processFrontMatter: vi.fn((_file: any, cb: (fm: Record<string, unknown>) => void) => {
+                    cb({});
+                    return Promise.resolve();
+                }),
+            },
+        };
+
+        (app as any)._triggerModify = () => {
+            if (capturedModifyHandler) capturedModifyHandler(file);
+        };
+
+        return { app, file };
+    };
+
+    // Helper: let vault.create's microtask resolve so the modify handler is registered
+    const flush = () => Promise.resolve();
+
+    it('creates an empty file at the given path', async () => {
+        const { app } = makeApp();
+        const promise = createNoteWithTemplater(app as any, 'References/doe2024.md', makeMsg(), '10.1/test');
+        await flush();
+        (app as any)._triggerModify();
+        await promise;
+        expect(app.vault.create).toHaveBeenCalledWith('References/doe2024.md', '');
+    });
+
+    it('calls processFrontMatter to set DOI fields', async () => {
+        const { app } = makeApp();
+        const promise = createNoteWithTemplater(app as any, 'References/doe2024.md', makeMsg(), '10.1/test');
+        await flush();
+        (app as any)._triggerModify();
+        await promise;
+        expect(app.fileManager.processFrontMatter).toHaveBeenCalled();
+    });
+
+    it('calls vault.process to insert body content', async () => {
+        const { app } = makeApp();
+        const promise = createNoteWithTemplater(app as any, 'References/doe2024.md', makeMsg(), '10.1/test');
+        await flush();
+        (app as any)._triggerModify();
+        await promise;
+        expect(app.vault.process).toHaveBeenCalled();
+    });
+
+    it('resolves early when vault modify event fires before timeout', async () => {
+        const { app } = makeApp();
+        const promise = createNoteWithTemplater(app as any, 'References/doe2024.md', makeMsg(), '10.1/test');
+        await flush();
+        (app as any)._triggerModify();
+        await promise;
+        expect(app.vault.offref).toHaveBeenCalled();
     });
 });

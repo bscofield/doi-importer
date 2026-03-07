@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, TFile, requestUrl } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, requestUrl } from 'obsidian';
 
 // ─── Crossref Types ───────────────────────────────────────────────────────────
 
@@ -165,6 +165,49 @@ export function buildNoteContent(msg: CrossrefMessage, doi: string): string {
 	return lines.join('\n');
 }
 
+export function buildNoteBody(msg: CrossrefMessage, doi: string): string {
+	const title = msg.title?.[0];
+	const authors = msg.author ? formatAuthors(msg.author) : [];
+	const heading = title ?? doi;
+	const lines: string[] = ['', `# ${heading}`, ''];
+	if (authors.length > 0) {
+		lines.push(`**Authors:** ${authors.join('; ')}`);
+		lines.push('');
+	}
+	if (msg.abstract) {
+		const stripped = stripJats(msg.abstract);
+		if (stripped) {
+			lines.push('**Abstract:**');
+			lines.push('');
+			lines.push(stripped);
+		}
+	}
+	return lines.join('\n');
+}
+
+export function applyDoiFrontmatter(
+	fm: Record<string, unknown>,
+	msg: CrossrefMessage,
+	doi: string
+): void {
+	fm.doi = doi;
+	const title = msg.title?.[0];
+	if (title) fm.title = title;
+	const authors = msg.author ? formatAuthors(msg.author) : [];
+	if (authors.length) fm.authors = authors;
+	const year = msg.issued?.['date-parts']?.[0]?.[0];
+	if (year) fm.year = year;
+	const journal = msg['container-title']?.[0];
+	if (journal) fm.journal = journal;
+	if (msg.volume) fm.volume = msg.volume;
+	if (msg.issue) fm.issue = msg.issue;
+	if (msg.page) fm.pages = msg.page;
+	if (msg.publisher) fm.publisher = msg.publisher;
+	fm.url = msg.URL ?? `https://doi.org/${doi}`;
+	if (msg.type) fm.type = msg.type;
+	fm.aliases = [doi, buildCitekey(msg), ...(title ? [title] : [])];
+}
+
 export async function fetchCitation(doi: string, style: string): Promise<string> {
 	const url = `https://doi.org/${encodeURIComponent(doi)}`;
 	const response = await requestUrl({
@@ -174,6 +217,46 @@ export async function fetchCitation(doi: string, style: string): Promise<string>
 	});
 	if (response.status !== 200) throw new Error(`Status ${response.status}`);
 	return response.text.trim();
+}
+
+// ─── Templater Integration ────────────────────────────────────────────────────
+
+export async function createNoteWithTemplater(
+	app: App,
+	path: string,
+	msg: CrossrefMessage,
+	doi: string
+): Promise<TFile> {
+	// Phase 1: create empty file — triggers Templater folder template
+	const file = await app.vault.create(path, '');
+
+	// Phase 2: wait for Templater to write its template (or give up after 1 s)
+	await new Promise<void>((resolve) => {
+		const timer = setTimeout(resolve, 1000);
+		const ref = app.vault.on('modify', (f: TAbstractFile) => {
+			if (f.path === file.path) {
+				clearTimeout(timer);
+				app.vault.offref(ref);
+				resolve();
+			}
+		});
+	});
+
+	// Merge DOI frontmatter with whatever Templater wrote
+	await app.fileManager.processFrontMatter(file, (fm) => {
+		applyDoiFrontmatter(fm, msg, doi);
+	});
+
+	// Prepend DOI body content immediately after the frontmatter block
+	const body = buildNoteBody(msg, doi);
+	await app.vault.process(file, (existing) => {
+		const fmMatch = existing.match(/^---\n[\s\S]*?\n---\n?/);
+		if (!fmMatch) return body + '\n' + existing;
+		const afterFm = existing.slice(fmMatch[0].length);
+		return fmMatch[0] + body + (afterFm.trim() ? '\n' + afterFm : '');
+	});
+
+	return file;
 }
 
 // ─── Main Plugin Class ────────────────────────────────────────────────────────
@@ -251,7 +334,10 @@ export default class DoiImporter extends Plugin {
 		const path = `${this.settings.notesFolder}/${fileName}.md`;
 
 		await ensureFolder(this.app, this.settings.notesFolder);
-		const file = await this.app.vault.create(path, content);
+		const isTemplaterActive = (this.app.plugins as any).enabledPlugins?.has('templater-obsidian');
+		const file = isTemplaterActive
+			? await createNoteWithTemplater(this.app, path, msg, doi)
+			: await this.app.vault.create(path, content);
 		new Notice(`Created: ${fileName}`);
 		editor.replaceSelection(`[[${fileName}|${linkText}]]`);
 
