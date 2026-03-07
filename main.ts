@@ -74,11 +74,13 @@ export function resolveFileName(template: string, msg: CrossrefMessage, doi: str
 	const citekey = buildCitekey(msg);
 	const doiSlug = doi.replace(/[^a-z0-9]/gi, '-');
 	const titleRaw = msg.title?.[0] ?? '';
-	const titleSlug = titleRaw.slice(0, 40).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+	const titleClean = titleRaw.replace(/[/\\:*?"<>|#^[\]]/g, '').replace(/\s+/g, ' ').trim();
+	const year = msg.issued?.['date-parts']?.[0]?.[0]?.toString() ?? '';
 	return template
 		.replace('{{citekey}}', citekey)
 		.replace('{{doi-slug}}', doiSlug)
-		.replace('{{title}}', titleSlug);
+		.replace('{{title}}', titleClean)
+		.replace('{{year}}', year);
 }
 
 export function findNoteByDoi(app: App, doi: string): TFile | null {
@@ -331,7 +333,7 @@ class DoiImporterSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('File name template')
-			.setDesc('Template for note filenames. Tokens: {{citekey}}, {{doi-slug}}, {{title}}')
+			.setDesc('Template for note filenames. Tokens: {{citekey}}, {{doi-slug}}, {{title}}, {{year}}')
 			.addText(text => text
 				.setPlaceholder('{{citekey}}')
 				.setValue(this.plugin.settings.fileNameTemplate)

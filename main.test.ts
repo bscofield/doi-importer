@@ -218,17 +218,30 @@ describe('resolveFileName', () => {
         expect(resolveFileName('{{doi-slug}}', msg, '10.1037/abc.123')).toBe('10-1037-abc-123');
     });
 
-    it('replaces {{title}} with lowercased slug of first 40 chars', () => {
-        expect(resolveFileName('{{title}}', msg, '10.1/x')).toBe('how-the-mind-works');
+    it('replaces {{title}} preserving case and spaces, stripping problematic chars', () => {
+        expect(resolveFileName('{{title}}', msg, '10.1/x')).toBe('How the Mind Works');
     });
 
-    it('truncates title slug at 40 characters', () => {
-        const longTitle = { ...msg, title: ['A'.repeat(50)] };
-        expect(resolveFileName('{{title}}', longTitle, '10.1/x')).toHaveLength(40);
+    it('strips problematic filename chars from {{title}}', () => {
+        const weirdTitle = { ...msg, title: ['Title: "Weird" / Study?'] };
+        expect(resolveFileName('{{title}}', weirdTitle, '10.1/x')).toBe('Title Weird Study');
+    });
+
+    it('replaces {{year}} with the publication year', () => {
+        expect(resolveFileName('{{year}}', msg, '10.1/x')).toBe('2023');
+    });
+
+    it('replaces {{year}} with empty string when year is missing', () => {
+        const noYear = { ...msg, issued: undefined };
+        expect(resolveFileName('{{year}}', noYear, '10.1/x')).toBe('');
     });
 
     it('supports combining tokens', () => {
         expect(resolveFileName('{{citekey}}-{{doi-slug}}', msg, '10.1/ab')).toBe('smith2023-10-1-ab');
+    });
+
+    it('supports title and year tokens together', () => {
+        expect(resolveFileName('{{title}} ({{year}})', msg, '10.1/x')).toBe('How the Mind Works (2023)');
     });
 });
 

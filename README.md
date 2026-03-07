@@ -68,7 +68,7 @@ Fields that are absent from the Crossref response are omitted from the frontmatt
 
 ## Citekey and filename
 
-The default citekey format is `familyyear` (e.g. `smith2023`), always lowercased. The default filename is the citekey.
+The default citekey format is `familyyear` (e.g. `smith2023`), always lowercased. The default filename template is `{{citekey}}`.
 
 If two different papers would produce the same citekey, the second one gets a letter suffix: `smith2023b`, `smith2023c`, and so on. If you import the same DOI twice, the plugin recognises the existing note by its `doi` frontmatter field and links to it rather than creating a duplicate.
 
@@ -87,4 +87,7 @@ If two different papers would produce the same citekey, the second one gets a le
 |---|---|---|
 | `{{citekey}}` | `smith2023` | Author family name + year, lowercased |
 | `{{doi-slug}}` | `10-1037-0003-066x-59-1-29` | DOI with non-alphanumeric characters replaced by `-` |
-| `{{title}}` | `how-the-mind-works` | First 40 characters of title, lowercased, spaces to dashes |
+| `{{title}}` | `How the Mind Works` | Title with problematic filename characters stripped; case and spaces preserved |
+| `{{year}}` | `2003` | Four-digit publication year |
+
+For example, the template `{{title}} ({{year}})` produces `How the Mind Works (2003).md`.
