@@ -1,6 +1,6 @@
 {
 	"name": "doi-importer",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "An Obsidian plugin.",
 	"main": "main.js",
 	"scripts": {
@@ -12,7 +12,7 @@
 		"obsidian",
 		"plugin"
 	],
-	"author": "Your Name",
+	"author": "Ben Scofield",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^22.0.0",
