@@ -353,9 +353,10 @@ describe('buildNoteContent', () => {
         expect(buildNoteContent(fullMsg, '10.1/abc')).toContain('title: "How the Mind Works"');
     });
 
-    it('includes both DOI and title as aliases', () => {
+    it('includes DOI, citekey, and title as aliases', () => {
         const content = buildNoteContent(fullMsg, '10.1/abc');
         expect(content).toContain('  - "10.1/abc"');
+        expect(content).toContain('  - "smith2023"');
         expect(content).toContain('  - "How the Mind Works"');
     });
 

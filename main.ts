@@ -136,7 +136,7 @@ export function buildNoteContent(msg: CrossrefMessage, doi: string): string {
 
 	if (msg.type) lines.push(`type: "${msg.type}"`);
 
-	const aliases: string[] = [doi];
+	const aliases: string[] = [doi, buildCitekey(msg)];
 	if (title) aliases.push(title.replace(/"/g, '\\"'));
 	lines.push('aliases:');
 	aliases.forEach(a => lines.push(`  - "${a}"`));
