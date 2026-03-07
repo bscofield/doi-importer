@@ -334,7 +334,7 @@ export default class DoiImporter extends Plugin {
 		const path = `${this.settings.notesFolder}/${fileName}.md`;
 
 		await ensureFolder(this.app, this.settings.notesFolder);
-		const isTemplaterActive = (this.app.plugins as any).enabledPlugins?.has('templater-obsidian');
+		const isTemplaterActive = (this.app as any).plugins?.enabledPlugins?.has('templater-obsidian');
 		const file = isTemplaterActive
 			? await createNoteWithTemplater(this.app, path, msg, doi)
 			: await this.app.vault.create(path, content);
